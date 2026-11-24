@@ -1,0 +1,46 @@
+# Board-neutral U-Boot hardening fragment. Symbols/addresses are SoC-specific;
+# merge the relevant lines into configs/<board>_defconfig rather than using
+# this as a complete defconfig.
+
+# Signed FIT boot images (kernel + DTB + optional initramfs).
+CONFIG_FIT=y
+CONFIG_FIT_SIGNATURE=y
+CONFIG_FIT_SIGNATURE_MAX_SIZE=0x10000000
+CONFIG_SHA256=y
+CONFIG_RSA=y
+# Some modern designs use ECDSA instead of RSA:
+# CONFIG_ECDSA=y
+
+# Control FDT holds the verified-boot public key.
+CONFIG_OF_CONTROL=y
+CONFIG_OF_SEPARATE=y
+
+# Boot failure counting and automatic recovery.
+CONFIG_BOOTCOUNT_LIMIT=y
+# Select the backend implemented by the board: environment, RTC register or
+# SoC/EEPROM/NVMEM bootcount. ENV is convenient but requires redundant env.
+CONFIG_BOOTCOUNT_ENV=y
+CONFIG_CMD_BOOTCOUNT=y
+# Define bootlimit and altbootcmd in the board's default environment
+# (CONFIG_EXTRA_ENV_SETTINGS), not only in a sourced boot.scr, so recovery
+# exists before the first failed update boot.
+
+# Redundant environment reduces a power-loss corruption brick risk.
+CONFIG_SYS_REDUNDAND_ENVIRONMENT=y
+CONFIG_ENV_SIZE=0x20000
+# CONFIG_ENV_OFFSET and CONFIG_ENV_OFFSET_REDUND must match the board's flash
+# partition layout and /etc/fw_env.config.
+
+# Serial console policy: do not leave an unauthenticated U-Boot prompt. Use a
+# keyed autoboot stop phrase and/or a challenge-response password.
+# CONFIG_BOOTDELAY=2
+CONFIG_AUTOBOOT_KEYED=y
+CONFIG_AUTOBOOT_PROMPT="GW secure boot: passphrase required to interrupt (%d s)\n"
+# CONFIG_AUTOBOOT_STOP_STR is board/secret-specific. Prefer the hashed/encrypted
+# autoboot support if the U-Boot version provides it.
+
+# Disable dangerous raw memory/flash commands in the normal production prompt.
+# CONFIG_CMD_MEM is not set
+# CONFIG_CMD_MMC is not set
+# CONFIG_CMD_USB is not set
+# Keep only the commands needed by gw-boot.cmd and the signed recovery path.

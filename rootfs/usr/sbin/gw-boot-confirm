@@ -1,0 +1,90 @@
+#!/bin/sh
+# Validate the current boot and tell the bootloader/update framework that it
+# is safe to keep this slot. Called by the application after cloud connection,
+# data acquisition and certificate checks succeed, or by a late systemd unit.
+
+set -u
+
+CONF="/etc/gw/boot.conf"
+[ -r "$CONF" ] && . "$CONF"
+
+REQUIRE_SECURE="${GW_REQUIRE_SECURE:-1}"
+CHECKS_DIR="${GW_BOOT_CHECKS_DIR:-/etc/gw/boot-checks.d}"
+SECURITY_STATUS_BIN="${GW_INIT_BIN:-/sbin/gw-init}"
+
+log() {
+	printf 'gw-boot-confirm: %s\n' "$*" >&2
+	if [ -w /dev/kmsg ]; then
+		printf 'gw-boot-confirm: %s\n' "$*" > /dev/kmsg 2>/dev/null || true
+	fi
+}
+
+fail() {
+	log "NOT confirming boot: $*"
+	exit 1
+}
+
+if [ "$REQUIRE_SECURE" = "1" ] && [ -x "$SECURITY_STATUS_BIN" ]; then
+	if ! "$SECURITY_STATUS_BIN" status >/dev/null 2>&1; then
+		"$SECURITY_STATUS_BIN" status >&2 2>/dev/null || true
+		fail "security policy is degraded"
+	fi
+	log "security status OK"
+fi
+
+if [ -d "$CHECKS_DIR" ]; then
+	for check in "$CHECKS_DIR"/*; do
+		[ -e "$check" ] || continue
+		case "$check" in
+			*.dpkg-*|*.rpm*|*.example) continue ;;
+		esac
+		if [ -x "$check" ]; then
+			log "running boot check $check"
+			"$check" || fail "boot check failed: $check"
+		fi
+	done
+fi
+
+# Product-level health check, for example a local HTTP health endpoint or a
+# PID file plus a successful signed telemetry round trip.
+if [ -n "${GW_HEALTH_COMMAND:-}" ]; then
+	# Intentionally word-split: administrator-controlled boot.conf.
+	$GW_HEALTH_COMMAND || fail "GW_HEALTH_COMMAND failed"
+fi
+
+case "${GW_UPDATE_BACKEND:-uboot}" in
+	none)
+		log "boot confirmation disabled by configuration"
+		;;
+	rauc)
+		command -v rauc >/dev/null 2>&1 || fail "rauc not found"
+		rauc status mark-good || fail "rauc mark-good failed"
+		;;
+	swupdate)
+		# Vendor integration usually supplies a precise swupdate/bootloader
+		# transaction command; set GW_CONFIRM_COMMAND in boot.conf.
+		[ -n "${GW_CONFIRM_COMMAND:-}" ] || fail "GW_CONFIRM_COMMAND is required for swupdate"
+		$GW_CONFIRM_COMMAND || fail "swupdate confirmation failed"
+		;;
+	command)
+		[ -n "${GW_CONFIRM_COMMAND:-}" ] || fail "GW_CONFIRM_COMMAND is not set"
+		$GW_CONFIRM_COMMAND || fail "GW_CONFIRM_COMMAND failed"
+		;;
+	uboot|*)
+		command -v fw_setenv >/dev/null 2>&1 || fail "fw_setenv not found"
+		[ -r /etc/fw_env.config ] || fail "/etc/fw_env.config missing"
+
+		fw_setenv bootcount 0 || fail "fw_setenv bootcount failed"
+		fw_setenv upgrade_available 0 || \
+			fail "fw_setenv upgrade_available failed"
+
+		# Optional A/B slot health variables, e.g. GW_ACTIVE_SLOT=a.
+		if [ -n "${GW_ACTIVE_SLOT:-}" ]; then
+			fw_setenv "slot_${GW_ACTIVE_SLOT}_ok" 1 || \
+				fail "could not mark slot ${GW_ACTIVE_SLOT} good"
+		fi
+		;;
+esac
+
+log "boot confirmed successfully"
+exit 0

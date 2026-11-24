@@ -1,0 +1,8 @@
+# One module name per line, exactly as accepted by modprobe(8).
+# Dependencies are handled by modules.dep. Put hardware-critical and vendor
+# modules here so gw-init loads them before setting modules_disabled=1 and
+# dropping CAP_SYS_MODULE.
+#
+# Example:
+# gw_fieldbus
+# vendor_can

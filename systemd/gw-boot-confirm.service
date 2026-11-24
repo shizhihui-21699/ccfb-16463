@@ -1,0 +1,15 @@
+[Unit]
+Description=Confirm gateway firmware after health checks
+Documentation=file:///usr/share/doc/gateway-security/ROLLOUT.md
+After=network-online.target time-sync.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Give acquisition and cloud connection time to become healthy. Prefer having
+# the application invoke gw-boot-confirm after its own end-to-end checks; this
+# unit is a fallback.
+ExecStartPre=/bin/sleep 120
+ExecStart=/usr/sbin/gw-boot-confirm
+# Do not let a failed confirmation look like a successful service start.
+RemainAfterExit=no

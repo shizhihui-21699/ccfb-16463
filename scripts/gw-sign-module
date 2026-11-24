@@ -1,0 +1,61 @@
+#!/bin/sh
+# Sign one or more vendor .ko files with the OEM module-signing key.
+# Run this only on the controlled build server/HSM host, never on the gateway.
+#
+# Usage:
+#   KDIR=/path/to/kernel/build scripts/gw-sign-module \
+#       oem-module.key oem-module.crt vendor.ko [more.ko ...]
+#
+# The matching certificate must be compiled into the kernel's trusted keyring
+# via CONFIG_SYSTEM_TRUSTED_KEYS.
+
+set -eu
+
+usage() {
+	cat >&2 <<'EOF'
+usage: gw-sign-module <key.pem> <cert.pem> <module.ko> [module.ko ...]
+
+Environment:
+  KDIR       Configured kernel build tree
+  SIGN_FILE  Explicit path to scripts/sign-file
+  HASH       Hash algorithm (default: sha256)
+EOF
+}
+
+[ "$#" -ge 3 ] || { usage; exit 2; }
+
+KEY=$1
+CERT=$2
+shift 2
+
+HASH="${HASH:-sha256}"
+KDIR="${KDIR:-/lib/modules/$(uname -r)/build}"
+SIGN_FILE="${SIGN_FILE:-$KDIR/scripts/sign-file}"
+
+[ -r "$KEY" ] || { echo "cannot read key: $KEY" >&2; exit 2; }
+[ -r "$CERT" ] || { echo "cannot read cert: $CERT" >&2; exit 2; }
+[ -x "$SIGN_FILE" ] || {
+	echo "sign-file not executable: $SIGN_FILE" >&2
+	echo "Build the kernel first or set SIGN_FILE explicitly." >&2
+	exit 2
+}
+
+case "$HASH" in
+	sha256|sha384|sha512) ;;
+	*) echo "unsupported HASH for this policy: $HASH" >&2; exit 2 ;;
+esac
+
+for module in "$@"; do
+	[ -f "$module" ] || { echo "module not found: $module" >&2; exit 2; }
+	case "$module" in
+		*.ko) ;;
+		*)
+			echo "warning: sign the uncompressed .ko before zstd/xz compression: $module" >&2
+			;;
+	esac
+
+	echo "signing $module with $HASH"
+	"$SIGN_FILE" "$HASH" "$KEY" "$CERT" "$module"
+done
+
+echo "OK. Verify with: modinfo <module.ko> | grep -E 'signer|sig_key|sig_id'"

@@ -1,0 +1,117 @@
+# Gateway security configuration fragment.
+# Targets an LTS kernel such as 6.1/6.6. Symbol names drift slightly between
+# releases; always resolve with:
+#
+#   cp arch/<arch>/configs/<board>_defconfig .config
+#   scripts/kconfig/merge_config.sh .config \
+#       configs/gateway_security.fragment
+#   make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
+#
+# Do not copy this file blindly into a production build. First run the audit
+# phase in docs/ROLLOUT.md, then move to the enforcing settings below.
+
+# ---------------------------------------------------------------------------
+# Signed loadable modules
+# ---------------------------------------------------------------------------
+CONFIG_MODULES=y
+# Keep module versions strictly matched to the kernel.
+CONFIG_MODVERSIONS=y
+CONFIG_MODULE_SIG=y
+# Enforce at boot/build time. module.sig_enforce=1 in the signed command line
+# is an additional switch, not a replacement for this option.
+CONFIG_MODULE_SIG_FORCE=y
+CONFIG_MODULE_SIG_ALL=y
+# CONFIG_MODULE_SIG_SHA1 is not set
+# CONFIG_MODULE_SIG_SHA384 is not set
+# CONFIG_MODULE_SIG_SHA512 is not set
+CONFIG_MODULE_SIG_SHA256=y
+CONFIG_MODULE_SIG_HASH="sha256"
+# Production keys are supplied by the hardened build server/HSM. Do not commit
+# a private key. Do not force CONFIG_MODULE_SIG_KEY to an empty string here;
+# let olddefconfig keep its default or pass the production PEM at build time:
+#   scripts/config --set-str MODULE_SIG_KEY /secure-build/keys/gw-signing.pem
+#   scripts/config --set-str SYSTEM_TRUSTED_KEYS /secure-build/keys/gw-trusted.pem
+CONFIG_SYSTEM_TRUSTED_KEYS=""
+CONFIG_SYSTEM_DATA_VERIFICATION=y
+CONFIG_ASYMMETRIC_KEY_TYPE=y
+CONFIG_ASYMMETRIC_PUBLIC_KEY_SUBTYPE=y
+CONFIG_X509_CERTIFICATE_PARSER=y
+CONFIG_PKCS7_MESSAGE_PARSER=y
+
+# Optional: require modules and firmware to be loaded from the pinned verified
+# filesystem. Enable only after confirming your module/firmware locations.
+CONFIG_SECURITY_LOADPIN=y
+# After validation, enable enforcement with:
+# CONFIG_SECURITY_LOADPIN_ENFORCE=y
+
+# ---------------------------------------------------------------------------
+# Lockdown, Yama and attack-surface reduction
+# ---------------------------------------------------------------------------
+CONFIG_SECURITY=y
+CONFIG_SECURITYFS=y
+CONFIG_SECURITY_LOCKDOWN_LSM=y
+CONFIG_SECURITY_LOCKDOWN_LSM_EARLY=y
+CONFIG_SECURITY_YAMA=y
+# Do not overwrite CONFIG_LSM without keeping "capability". A typical value is:
+# CONFIG_LSM="lockdown,yama,loadpin,integrity"
+
+# Disable kernel loading/kexec and hibernation paths that can replace the
+# running kernel.
+# CONFIG_KEXEC is not set
+# CONFIG_KEXEC_FILE is not set
+# CONFIG_HIBERNATION is not set
+
+# Disable SysRq unless a signed debug procedure depends on it.
+# CONFIG_MAGIC_SYSRQ is not set
+
+# Disable debugfs in the production kernel. It exposes registers and kernel
+# state and is blocked by lockdown in some modes anyway.
+# CONFIG_DEBUG_FS is not set
+
+# Keep BPF available only if a product component requires it; unprivileged
+# BPF must always be off. The C wrapper also drops CAP_BPF from login sessions.
+CONFIG_BPF_SYSCALL=y
+CONFIG_BPF_UNPRIV_DEFAULT_OFF=y
+
+# If the product does not use containers/sandboxes, disabling user namespaces
+# removes a common privilege-escalation precondition. Validate vendor agents
+# first.
+# CONFIG_USER_NS is not set
+
+# ---------------------------------------------------------------------------
+# Physical and kernel-memory access
+# ---------------------------------------------------------------------------
+# Strong production profile: no /dev/mem, /dev/kmem, /dev/port or /proc/kcore.
+# Vendor applications must use a normal driver/ioctl/sysfs interface, not mmap
+# of /dev/mem. If a narrow register interface is required, provide a signed,
+# allow-listed broker driver instead of re-enabling all of /dev/mem.
+# CONFIG_DEVMEM is not set
+# CONFIG_DEVKMEM is not set
+# CONFIG_DEVPORT is not set
+# CONFIG_PROC_KCORE is not set
+
+# Debug-capable alternative only for an OEM-signed debug FIT image:
+# CONFIG_DEVMEM=y
+# CONFIG_STRICT_DEVMEM=y
+# CONFIG_IO_STRICT_DEVMEM=y
+# CONFIG_DEVKMEM is not set
+# CONFIG_DEVPORT is not set
+# CONFIG_PROC_KCORE is not set
+
+# ---------------------------------------------------------------------------
+# Verified/read-only system volume
+# ---------------------------------------------------------------------------
+CONFIG_BLK_DEV_DM=y
+CONFIG_DM_VERITY=y
+CONFIG_DEVTMPFS=y
+CONFIG_DEVTMPFS_MOUNT=y
+CONFIG_SQUASHFS=y
+CONFIG_SQUASHFS_ZSTD=y
+# EROFS is a good alternative; keep only one filesystem in a tiny image.
+# CONFIG_EROFS_FS is not set
+# CONFIG_EROFS_FS_ZIP is not set
+
+# Hash/crypto support normally selected automatically; listed here to make
+# minimal images easier to audit.
+CONFIG_CRYPTO=y
+CONFIG_CRYPTO_SHA256=y

@@ -1,0 +1,17 @@
+# Additional sysctls applied by gw-init in secure mode.
+# Format: /proc/sys/path/with/slashes value
+# Missing keys are ignored because kernel CONFIG options vary.
+
+/proc/sys/fs/protected_hardlinks 1
+/proc/sys/fs/protected_symlinks 1
+/proc/sys/fs/suid_dumpable 0
+/proc/sys/net/ipv4/conf/all/accept_redirects 0
+/proc/sys/net/ipv4/conf/default/accept_redirects 0
+/proc/sys/net/ipv4/conf/all/send_redirects 0
+/proc/sys/net/ipv4/conf/default/send_redirects 0
+/proc/sys/net/ipv4/conf/all/accept_source_route 0
+/proc/sys/net/ipv4/conf/default/accept_source_route 0
+
+# Enable only if the product does not use containers or unprivileged
+# sandboxes. This can break some vendor debugging tools.
+# /proc/sys/user/max_user_namespaces 0

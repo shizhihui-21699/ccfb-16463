@@ -1,0 +1,40 @@
+# Paths to mark FS_IMMUTABLE_FL before gw-init drops CAP_LINUX_IMMUTABLE.
+# Format: one entry per line. A leading '-' on the path makes a missing or
+# unsupported path non-fatal in `gw-init status`.
+#
+#   /path                 immutable (chattr +i)
+#   append /path          append-only (chattr +a), useful for event logs
+#
+# Directories are marked but are not traversed by gw-init; enumerate every file
+# that must be protected, or let load-early-modules recursively lock a module
+# tree. Read-only squashfs/EROFS/dm-verity paths are detected as protected even
+# when the filesystem does not support immutable flags.
+
+/sbin/gw-init
+/etc/gw/load-early-modules
+/etc/gw/early-modules
+/etc/gw/protected.list
+/etc/gw/sysctl.lock
+
+# Boot/security policy
+-/etc/inittab
+-/etc/init.d/rcS
+-/lib/systemd/system/gw-boot-confirm.service
+-/usr/sbin/gw-boot-confirm
+
+# Certificates and trust anchors. Adjust to the product's real paths.
+/etc/gw/certs
+/etc/gw/certs/ca.pem
+/etc/gw/certs/device.crt
+-/etc/gw/certs/device.key
+
+# Application binaries and collection policy. Add the real gateway daemon.
+-/usr/bin/gw-collector
+-/usr/sbin/gw-agent
+-/etc/gw/collection-policy.json
+
+# Mutable audit/event logs can be append-only. This prevents truncation or
+# in-place rewriting, but does not prevent an attacker from appending false
+# records; sign/forward records promptly for strong data integrity.
+# append -/var/log/gw/events.log
+# append -/var/spool/gw/audit.jsonl

@@ -1,0 +1,44 @@
+#!/bin/sh
+# Executed by /sbin/gw-init before the one-way capability drop.
+# Keep this script POSIX sh and dependency-free.
+
+MODFILE="/etc/gw/early-modules"
+
+log() {
+	msg="gw-load-modules: $*"
+	if [ -w /dev/kmsg ]; then
+		printf '%s\n' "$msg" > /dev/kmsg 2>/dev/null || true
+	fi
+	printf '%s\n' "$msg" >&2
+}
+
+if [ -r "$MODFILE" ]; then
+	# Fields: module name, followed by optional module parameters.
+	while read -r module params; do
+		case "$module" in
+			''|\#*) continue ;;
+		esac
+
+		log "loading $module"
+		# params is intentionally word-split: it is a root-only policy file.
+		if ! modprobe "$module" $params; then
+			log "ERROR: failed to load $module"
+		fi
+	done < "$MODFILE"
+else
+	log "no $MODFILE; skipping early module load"
+fi
+
+# On a writable rootfs, make the installed module tree immutable before
+# gw-init drops CAP_LINUX_IMMUTABLE. On squashfs/EROFS/dm-verity this fails
+# harmlessly because the medium is already read-only/integrity-protected.
+# Generate modules.dep/modules.alias in the image build and do not run depmod
+# during normal boot.
+if command -v chattr >/dev/null 2>&1; then
+	kver="$(uname -r)"
+	if [ -d "/lib/modules/$kver" ]; then
+		chattr -R +i "/lib/modules/$kver" 2>/dev/null || true
+	fi
+fi
+
+exit 0

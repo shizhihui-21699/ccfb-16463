@@ -1,0 +1,8 @@
+# /etc/fw_env.config example for an eMMC device with redundant U-Boot env.
+# Device name   Device offset   Env size     Flash sector size
+/dev/mmcblk0    0x1FF00000       0x20000      0x200
+/dev/mmcblk0    0x1FF20000       0x20000      0x200
+
+# On raw NAND/NOR use the MTD character devices and erase size, for example:
+# /dev/mtd1 0x00000 0x20000 0x20000
+# /dev/mtd2 0x00000 0x20000 0x20000
